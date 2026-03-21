@@ -1,0 +1,177 @@
+services:
+  eureka:
+    image: ghcr.io/tfg-timothy-crittenden/eureka:latest
+    container_name: eureka
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || wget -qO- http://localhost:8761/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - tfg-net
+
+  auth-db:
+    image: postgres:16-alpine
+    container_name: auth-db
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - tfg-net
+
+  exam-db:
+    image: postgres:16-alpine
+    container_name: exam-db
+    environment:
+      POSTGRES_DB: exam_db
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5434:5432"
+    volumes:
+      - exam-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d exam_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - tfg-net
+
+  classroom-db:
+    image: postgres:16-alpine
+    container_name: classroom-db
+    environment:
+      POSTGRES_DB: classroom_db
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5435:5432"
+    volumes:
+      - classroom-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d classroom_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - tfg-net
+
+  user-service:
+    image: ghcr.io/tfg-timothy-crittenden/user-service:latest
+    container_name: user-service
+    ports:
+      - "18081:8082"
+    environment:
+      SPRING_APPLICATION_NAME: user-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: myuser
+      SPRING_DATASOURCE_PASSWORD: secret
+      SPRING_SQL_INIT_MODE: always
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+      JAVA_TOOL_OPTIONS: >-
+        -Deureka.client.enabled=true
+        -Deureka.client.register-with-eureka=true
+        -Deureka.client.fetch-registry=true
+        -Deureka.client.serviceUrl.defaultZone=http://eureka:8761/eureka/
+        -Deureka.instance.hostname=user-service
+        -Deureka.instance.nonSecurePort=8082
+        -Deureka.instance.preferIpAddress=false
+    depends_on:
+      eureka:
+        condition: service_healthy
+      auth-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - tfg-net
+
+  exam-service:
+    image: ghcr.io/tfg-timothy-crittenden/exam-service:latest
+    container_name: exam-service
+    ports:
+      - "18082:8082"
+    environment:
+      SPRING_APPLICATION_NAME: exam-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://exam-db:5432/exam_db
+      SPRING_DATASOURCE_USERNAME: myuser
+      SPRING_DATASOURCE_PASSWORD: secret
+      SPRING_SQL_INIT_MODE: always
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+      JAVA_TOOL_OPTIONS: >-
+        -Deureka.client.enabled=true
+        -Deureka.client.register-with-eureka=true
+        -Deureka.client.fetch-registry=true
+        -Deureka.client.serviceUrl.defaultZone=http://eureka:8761/eureka/
+        -Deureka.instance.hostname=exam-service
+        -Deureka.instance.nonSecurePort=8082
+        -Deureka.instance.preferIpAddress=false
+    depends_on:
+      eureka:
+        condition: service_healthy
+      exam-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - tfg-net
+
+  classroom-service:
+    image: ghcr.io/tfg-timothy-crittenden/classroom-service:latest
+    container_name: classroom-service
+    ports:
+      - "18083:8082"
+    environment:
+      SPRING_APPLICATION_NAME: classroom-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://classroom-db:5432/classroom_db
+      SPRING_DATASOURCE_USERNAME: myuser
+      SPRING_DATASOURCE_PASSWORD: secret
+      SPRING_SQL_INIT_MODE: always
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+      JAVA_TOOL_OPTIONS: >-
+        -Deureka.client.enabled=true
+        -Deureka.client.register-with-eureka=true
+        -Deureka.client.fetch-registry=true
+        -Deureka.client.serviceUrl.defaultZone=http://eureka:8761/eureka/
+        -Deureka.instance.hostname=classroom-service
+        -Deureka.instance.nonSecurePort=8082
+        -Deureka.instance.preferIpAddress=false
+    depends_on:
+      eureka:
+        condition: service_healthy
+      classroom-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - tfg-net
+
+networks:
+  tfg-net:
+    driver: bridge
+
+volumes:
+  auth-db-data:
+  exam-db-data:
+  classroom-db-data:
