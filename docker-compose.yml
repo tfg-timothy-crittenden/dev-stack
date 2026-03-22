@@ -1,4 +1,18 @@
 services:
+  mailpit:
+    image: axllent/mailpit
+    container_name: mailpit
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    ports:
+      - 8025:8025
+      - 1025:1025
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
   eureka:
     image: ghcr.io/tfg-timothy-crittenden/eureka:latest
     container_name: eureka
@@ -14,19 +28,19 @@ services:
     networks:
       - tfg-net
 
-  auth-db:
+  user-db:
     image: postgres:16-alpine
-    container_name: auth-db
+    container_name: user-db
     environment:
-      POSTGRES_DB: auth_db
+      POSTGRES_DB: user_db
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: secret
     ports:
       - "5433:5432"
     volumes:
-      - auth-db-data:/var/lib/postgresql/data
+      - user-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U myuser -d auth_db"]
+      test: ["CMD-SHELL", "pg_isready -U myuser -d user_db"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -81,7 +95,7 @@ services:
       - "18081:8082"
     environment:
       SPRING_APPLICATION_NAME: user-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/auth_db
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/user_db
       SPRING_DATASOURCE_USERNAME: myuser
       SPRING_DATASOURCE_PASSWORD: secret
       SPRING_SQL_INIT_MODE: always
@@ -96,10 +110,11 @@ services:
         -Deureka.instance.hostname=user-service
         -Deureka.instance.nonSecurePort=8082
         -Deureka.instance.preferIpAddress=false
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
     depends_on:
       eureka:
         condition: service_healthy
-      auth-db:
+      user-db:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -127,10 +142,29 @@ services:
         -Deureka.instance.hostname=exam-service
         -Deureka.instance.nonSecurePort=8082
         -Deureka.instance.preferIpAddress=false
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
     depends_on:
       eureka:
         condition: service_healthy
       exam-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - tfg-net
+  tfg-gateway:
+    build:
+      context: ../tfg-gateway
+      dockerfile: Dockerfile
+    container_name: tfg-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_HOST: eureka
+      EUREKA_PORT: "8761"
+      SERVICE_IP: tfg-gateway
+      SERVER_PORT: "8080"
+    depends_on:
+      eureka:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -158,6 +192,7 @@ services:
         -Deureka.instance.hostname=classroom-service
         -Deureka.instance.nonSecurePort=8082
         -Deureka.instance.preferIpAddress=false
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
     depends_on:
       eureka:
         condition: service_healthy
@@ -172,6 +207,6 @@ networks:
     driver: bridge
 
 volumes:
-  auth-db-data:
+  user-db-data:
   exam-db-data:
   classroom-db-data:
