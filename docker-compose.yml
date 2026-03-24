@@ -3,14 +3,11 @@ services:
     image: axllent/mailpit
     container_name: mailpit
     restart: unless-stopped
-    volumes:
-      - ./data:/data
     ports:
       - 8025:8025
       - 1025:1025
     environment:
       MP_MAX_MESSAGES: 5000
-      MP_DATABASE: /data/mailpit.db
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
   eureka:
@@ -88,6 +85,21 @@ services:
     networks:
       - tfg-net
 
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9411/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - tfg-net
+
   user-service:
     image: ghcr.io/tfg-timothy-crittenden/user-service:latest
     container_name: user-service
@@ -102,7 +114,14 @@ services:
       SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+      OTEL_SERVICE_NAME: user-service
+      OTEL_TRACES_EXPORTER: zipkin
+      OTEL_EXPORTER_ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED: "true"
       JAVA_TOOL_OPTIONS: >-
+        -javaagent:/otel/opentelemetry-javaagent.jar
         -Deureka.client.enabled=true
         -Deureka.client.register-with-eureka=true
         -Deureka.client.fetch-registry=true
@@ -111,11 +130,17 @@ services:
         -Deureka.instance.nonSecurePort=8082
         -Deureka.instance.preferIpAddress=false
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+    volumes:
+      - otel-java-agent:/otel:ro
     depends_on:
       eureka:
         condition: service_healthy
       user-db:
         condition: service_healthy
+      zipkin:
+        condition: service_healthy
+      otel-java-agent-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - tfg-net
@@ -134,7 +159,14 @@ services:
       SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+      OTEL_SERVICE_NAME: exam-service
+      OTEL_TRACES_EXPORTER: zipkin
+      OTEL_EXPORTER_ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED: "true"
       JAVA_TOOL_OPTIONS: >-
+        -javaagent:/otel/opentelemetry-javaagent.jar
         -Deureka.client.enabled=true
         -Deureka.client.register-with-eureka=true
         -Deureka.client.fetch-registry=true
@@ -143,29 +175,49 @@ services:
         -Deureka.instance.nonSecurePort=8082
         -Deureka.instance.preferIpAddress=false
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+    volumes:
+      - otel-java-agent:/otel:ro
     depends_on:
       eureka:
         condition: service_healthy
       exam-db:
         condition: service_healthy
+      zipkin:
+        condition: service_healthy
+      otel-java-agent-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - tfg-net
-  tfg-gateway:
+  gateway:
     build:
       context: ../tfg-gateway
       dockerfile: Dockerfile
-    container_name: tfg-gateway
+    container_name: gateway
     ports:
       - "8080:8080"
     environment:
       EUREKA_HOST: eureka
       EUREKA_PORT: "8761"
-      SERVICE_IP: tfg-gateway
+      SERVICE_IP: gateway
       SERVER_PORT: "8080"
+      OTEL_SERVICE_NAME: gateway
+      OTEL_TRACES_EXPORTER: zipkin
+      OTEL_EXPORTER_ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED: "true"
+      JAVA_TOOL_OPTIONS: >-
+        -javaagent:/otel/opentelemetry-javaagent.jar
+    volumes:
+      - otel-java-agent:/otel:ro
     depends_on:
       eureka:
         condition: service_healthy
+      zipkin:
+        condition: service_healthy
+      otel-java-agent-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - tfg-net
@@ -184,7 +236,14 @@ services:
       SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+      OTEL_SERVICE_NAME: classroom-service
+      OTEL_TRACES_EXPORTER: zipkin
+      OTEL_EXPORTER_ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED: "true"
       JAVA_TOOL_OPTIONS: >-
+        -javaagent:/otel/opentelemetry-javaagent.jar
         -Deureka.client.enabled=true
         -Deureka.client.register-with-eureka=true
         -Deureka.client.fetch-registry=true
@@ -193,11 +252,63 @@ services:
         -Deureka.instance.nonSecurePort=8082
         -Deureka.instance.preferIpAddress=false
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+    volumes:
+      - otel-java-agent:/otel:ro
     depends_on:
       eureka:
         condition: service_healthy
       classroom-db:
         condition: service_healthy
+      zipkin:
+        condition: service_healthy
+      otel-java-agent-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - tfg-net
+
+  otel-java-agent-init:
+    image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:latest
+    container_name: otel-java-agent-init
+    command:
+      - sh
+      - -ec
+      - >-
+        set -eux;
+        AGENT=/otel/opentelemetry-javaagent.jar;
+        SRC=/javaagent.jar;
+        mkdir -p /otel;
+        if [ -f "$$AGENT" ]; then
+          echo "OpenTelemetry Java agent already present";
+          ls -lah "$$AGENT";
+          exit 0;
+        fi;
+        cp "$$SRC" "$$AGENT";
+        chmod 444 "$$AGENT" || true;
+        echo "Installed:";
+        ls -lah /otel;
+    volumes:
+      - otel-java-agent:/otel
+    restart: "no"
+
+  minio:
+    image: minio/minio:RELEASE.2025-02-28T09-55-16Z
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
     networks:
       - tfg-net
@@ -210,3 +321,5 @@ volumes:
   user-db-data:
   exam-db-data:
   classroom-db-data:
+  otel-java-agent:
+  minio-data:
