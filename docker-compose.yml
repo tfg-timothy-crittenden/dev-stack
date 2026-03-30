@@ -4,12 +4,19 @@ services:
     container_name: mailpit
     restart: unless-stopped
     ports:
-      - 8025:8025
-      - 1025:1025
+      - "8025:8025"
+      - "1025:1025"
     environment:
       MP_MAX_MESSAGES: 5000
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8025/ || exit 1" ]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    networks:
+      - tfg-net
   eureka:
     image: ghcr.io/tfg-timothy-crittenden/eureka:latest
     container_name: eureka
