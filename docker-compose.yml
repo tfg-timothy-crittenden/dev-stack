@@ -99,7 +99,6 @@ services:
     restart: unless-stopped
     networks:
       - tfg-net
-
   user-service:
     image: ghcr.io/tfg-timothy-crittenden/user-service:latest
     container_name: user-service
@@ -114,12 +113,14 @@ services:
       SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+
       OTEL_SERVICE_NAME: user-service
       OTEL_TRACES_EXPORTER: zipkin
       OTEL_EXPORTER_ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
       OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED: "true"
+
       JAVA_TOOL_OPTIONS: >-
         -javaagent:/otel/opentelemetry-javaagent.jar
         -Deureka.client.enabled=true
@@ -129,9 +130,19 @@ services:
         -Deureka.instance.hostname=user-service
         -Deureka.instance.nonSecurePort=8082
         -Deureka.instance.preferIpAddress=false
+
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+
+      # Mailpit inside the docker network (service name = mailpit)
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: 1025
+      SPRING_MAIL_USERNAME:
+      SPRING_MAIL_PASSWORD:
+      APP_MAIL_FROM: no-reply@tfg.local
+
     volumes:
       - otel-java-agent:/otel:ro
+
     depends_on:
       eureka:
         condition: service_healthy
@@ -141,6 +152,9 @@ services:
         condition: service_healthy
       otel-java-agent-init:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_healthy
+
     restart: unless-stopped
     networks:
       - tfg-net
