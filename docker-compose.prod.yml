@@ -1,0 +1,483 @@
+#For deployment on AWS EC2. The associated .env for this deployment is NOT provided in this repo. Keys must be generated and stored in the EC2 prior to deployment
+name: tfg-prod
+
+services:
+  eureka:
+    image: ghcr.io/tfg-timothy-crittenden/eureka:latest
+    container_name: eureka
+    restart: unless-stopped
+    expose:
+      - "8761"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || wget -qO- http://localhost:8761/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - tfg-net
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  user-db:
+    image: postgres:16-alpine
+    container_name: user-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: ${USER_DB_USER}
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
+
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_DB_USER} -d user_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  material-db:
+    image: postgres:16-alpine
+    container_name: material-db
+    restart: unless-stopped
+    environment:
+      SECURITY_JWT_HS256_ALGORITHM: HS256
+      POSTGRES_DB: material_db
+      POSTGRES_USER: ${MATERIAL_DB_USER}
+      POSTGRES_PASSWORD: ${MATERIAL_DB_PASSWORD}
+    volumes:
+      - material-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MATERIAL_DB_USER} -d material_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  classroom-db:
+    image: postgres:16-alpine
+    container_name: classroom-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: classroom_db
+      POSTGRES_USER: ${CLASSROOM_DB_USER}
+      POSTGRES_PASSWORD: ${CLASSROOM_DB_PASSWORD}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    volumes:
+      - classroom-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CLASSROOM_DB_USER} -d classroom_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - tfg-net
+    depends_on:
+      - frontend
+      - minio
+      - mailpit
+  mailpit:
+    image: axllent/mailpit
+    container_name: mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+    expose:
+      - "1025"
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8025/ || exit 1"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD-SHELL", "echo srvr | nc -w 2 localhost 2181 | grep Zookeeper || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    expose:
+      - "29092"
+    environment:
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  minio:
+    image: minio/minio:RELEASE.2025-02-28T09-55-16Z
+    container_name: minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"
+    expose:
+      - "9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  user-service:
+    image: ghcr.io/tfg-timothy-crittenden/user-service:latest
+    container_name: user-service
+    restart: unless-stopped
+    expose:
+      - "8084"
+    environment:
+      APP_JWT_ALGORITHM: HS256
+      APP_JWT_SECRET: ${APP_JWT_SECRET}
+      SECURITY_JWT_HS256_SECRET_FORMAT: raw
+
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_APPLICATION_NAME: user-service
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      SERVER_PORT: 8084
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/user_db
+      SPRING_DATASOURCE_USERNAME: ${USER_DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${USER_DB_PASSWORD}
+
+      SPRING_SQL_INIT_MODE: never
+      SPRING_JPA_HIBERNATE_DDL_AUTO: none
+      SPRING_JPA_OPEN_IN_VIEW: "false"
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration
+      SPRING_FLYWAY_URL: jdbc:postgresql://user-db:5432/user_db
+      SPRING_FLYWAY_USER: ${USER_DB_USER}
+      SPRING_FLYWAY_PASSWORD: ${USER_DB_PASSWORD}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      SPRING_FLYWAY_BASELINE_VERSION: "1"
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: "true"
+      SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS: "*:Missing"
+
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: 1025
+      SPRING_MAIL_USERNAME:
+      SPRING_MAIL_PASSWORD:
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "false"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "false"
+      APP_MAIL_FROM: ${APP_MAIL_FROM}
+
+      APP_TOKENS_HMAC_SECRET: ${APP_TOKENS_HMAC_SECRET}
+      APP_FRONTEND_VERIFY_EMAIL_URL: ${FRONTEND_VERIFY_EMAIL_URL}
+      APP_FRONTEND_INVITATION_URL: ${FRONTEND_INVITATION_URL}
+
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      APP_KAFKA_TOPICS_TEACHER_ROLE_REVOKED: user.teacher-role-revoked.v1
+
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+
+      EUREKA_INSTANCE_HOSTNAME: user-service
+      EUREKA_INSTANCE_NON_SECURE_PORT: 8084
+
+
+      EUREKA_CLIENT_ENABLED: "true"
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "true"
+      EUREKA_CLIENT_FETCH_REGISTRY: "true"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+
+
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: INFO
+      LOGGING_LEVEL_COM_NETFLIX_DISCOVERY: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CLOUD_NETFLIX_EUREKA: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CORE_ENV: WARN
+
+    depends_on:
+      eureka:
+        condition: service_healthy
+      user-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  material-service:
+    image: ghcr.io/tfg-timothy-crittenden/material-service:latest
+    container_name: material-service
+    restart: unless-stopped
+    expose:
+      - "8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_APPLICATION_NAME: material-service
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      SERVER_PORT: 8082
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://material-db:5432/material_db?stringtype=unspecified
+      SPRING_DATASOURCE_USERNAME: ${MATERIAL_DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MATERIAL_DB_PASSWORD}
+
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      SPRING_FLYWAY_BASELINE_VERSION: "0.0"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_VALIDATE_MIGRATION_NAMING: "true"
+      SPRING_SQL_INIT_MODE: never
+
+      MINIO_URL: http://minio:9000
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MESSAGING_KAFKA_ENABLED: "true"
+      MESSAGING_TOPICS_MATERIAL_DELETED: material.deleted.v1
+      MESSAGING_TOPICS_MATERIAL_TITLES_UPDATED: material.titles.updated.v1
+
+      AUTHORIZATION_CLASSROOM_ENABLED: "true"
+      AUTHORIZATION_CLASSROOM_FAIL_OPEN: "false"
+      CLASSROOM_AUTH_BASE_URL: http://gateway:8080
+      AUTHORIZATION_CLASSROOM_BASE_URL: http://gateway:8080
+      AUTHORIZATION_CLASSROOM_CHECK_PATH: /classrooms/internal/authorization/material-access:check
+      AUTHORIZATION_CLASSROOM_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      AUTHORIZATION_CLASSROOM_INTERNAL_API_KEY_HEADER: X-Internal-Api-Key
+
+      SECURITY_JWT_HS256_ALGORITHM: HS256
+      SECURITY_JWT_HS256_SECRET: ${APP_JWT_SECRET}
+      SECURITY_JWT_HS256_SECRET_FORMAT: raw
+
+      EUREKA_INSTANCE_HOSTNAME: material-service
+      EUREKA_INSTANCE_NON_SECURE_PORT: 8082
+
+      EUREKA_CLIENT_ENABLED: "true"
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "true"
+      EUREKA_CLIENT_FETCH_REGISTRY: "true"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+
+      SERVER_TOMCAT_MAX_PART_COUNT: 50
+      SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE: 25MB
+      SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE: 200MB
+
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: INFO
+      LOGGING_LEVEL_COM_NETFLIX_DISCOVERY: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CLOUD_NETFLIX_EUREKA: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CORE_ENV: WARN
+
+    depends_on:
+      kafka:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+      material-db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  classroom-service:
+    image: ghcr.io/tfg-timothy-crittenden/classroom-service:latest
+    container_name: classroom-service
+    restart: unless-stopped
+    expose:
+      - "8083"
+    environment:
+      APP_JWT_SECRET: ${APP_JWT_SECRET}
+      SECURITY_JWT_HS256_SECRET: ${APP_JWT_SECRET}
+      SECURITY_JWT_HS256_SECRET_FORMAT: raw
+      SECURITY_JWT_HS256_ALGORITHM: HS256
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_APPLICATION_NAME: classroom-service
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      SERVER_PORT: 8083
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWS_ALGORITHMS: HS256
+
+      SECURITY_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://classroom-db:5432/classroom_db
+      SPRING_DATASOURCE_USERNAME: ${CLASSROOM_DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${CLASSROOM_DB_PASSWORD}
+
+      SPRING_SQL_INIT_MODE: never
+      SPRING_SQL_INIT_SCHEMA_LOCATIONS:
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "false"
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_OPEN_IN_VIEW: "false"
+
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      SPRING_FLYWAY_URL: jdbc:postgresql://classroom-db:5432/classroom_db
+      SPRING_FLYWAY_USER: ${CLASSROOM_DB_USER}
+      SPRING_FLYWAY_PASSWORD: ${CLASSROOM_DB_PASSWORD}
+
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_KAFKA_CONSUMER_AUTO_OFFSET_RESET: earliest
+
+      CLASSROOM_KAFKA_MATERIAL_DELETED_TOPIC: material.deleted.v1
+      CLASSROOM_KAFKA_MATERIAL_DELETED_GROUP_ID: classroom-service-material-deleted
+      CLASSROOM_KAFKA_MATERIAL_TITLES_UPDATED_TOPIC: material.titles.updated.v1
+      CLASSROOM_KAFKA_MATERIAL_TITLES_UPDATED_GROUP_ID: classroom-service-material-titles-updated
+      CLASSROOM_KAFKA_USER_TEACHER_ROLE_REVOKED_TOPIC: user.teacher-role-revoked.v1
+      CLASSROOM_KAFKA_USER_TEACHER_ROLE_REVOKED_GROUP_ID: classroom-service-user-teacher-role-revoked
+
+      EUREKA_INSTANCE_HOSTNAME: classroom-service
+      EUREKA_INSTANCE_NON_SECURE_PORT: 8083
+
+      EUREKA_CLIENT_ENABLED: "true"
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "true"
+      EUREKA_CLIENT_FETCH_REGISTRY: "true"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+
+
+
+      SPRING_MVC_STATIC_PATH_PATTERN: /static/**
+      SPRING_WEB_RESOURCES_STATIC_LOCATIONS: classpath:/static/
+
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_BOOT_AUTOCONFIGURE_SECURITY: ERROR
+      LOGGING_LEVEL_COM_NETFLIX_DISCOVERY: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CLOUD_NETFLIX_EUREKA: INFO
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CORE_ENV: WARN
+
+    depends_on:
+      eureka:
+        condition: service_healthy
+      classroom-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  gateway:
+    image: ghcr.io/tfg-timothy-crittenden/gateway:latest
+    container_name: gateway
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      EUREKA_HOST: eureka
+      EUREKA_PORT: "8761"
+      SERVICE_IP: gateway
+      SERVER_PORT: "8080"
+
+    depends_on:
+      eureka:
+        condition: service_healthy
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+  frontend:
+    image: ghcr.io/tfg-timothy-crittenden/tfg-frontend:latest
+    container_name: frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      API_UPSTREAM: http://gateway:8080
+    volumes:
+      - ./nginx/frontend.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      - tfg-net
+    logging: *default-logging
+
+networks:
+  tfg-net:
+    driver: bridge
+
+volumes:
+  user-db-data:
+  material-db-data:
+  classroom-db-data:
+  minio-data:
+  caddy-data:
+  caddy-config:
