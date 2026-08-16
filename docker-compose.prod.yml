@@ -1,4 +1,3 @@
-#For deployment on AWS EC2. The associated .env for this deployment is NOT provided in this repo. Keys must be generated and stored in the EC2 prior to deployment
 name: tfg-prod
 
 services:
@@ -81,7 +80,7 @@ services:
     networks:
       - tfg-net
     logging: *default-logging
-
+  
   caddy:
     image: caddy:2
     container_name: caddy
@@ -103,8 +102,6 @@ services:
     image: axllent/mailpit
     container_name: mailpit
     restart: unless-stopped
-    ports:
-      - "8025:8025"
     expose:
       - "1025"
     environment:
@@ -172,9 +169,8 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    ports:
-      - "9000:9000"
     expose:
+      - "9000"
       - "9001"
     volumes:
       - minio-data:/data
@@ -242,7 +238,7 @@ services:
       APP_KAFKA_TOPICS_TEACHER_ROLE_REVOKED: user.teacher-role-revoked.v1
 
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
-
+      
       EUREKA_INSTANCE_HOSTNAME: user-service
       EUREKA_INSTANCE_NON_SECURE_PORT: 8084
 
@@ -316,6 +312,12 @@ services:
       AUTHORIZATION_CLASSROOM_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       AUTHORIZATION_CLASSROOM_INTERNAL_API_KEY_HEADER: X-Internal-Api-Key
 
+      CLASSROOM_AUTHORIZATION_SERVICE_NAME: classroom-service
+      CLASSROOM_AUTHORIZATION_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      CLASSROOM_AUTHORIZATION_DEADLINE_MILLIS: 1500
+
+
+      
       SECURITY_JWT_HS256_ALGORITHM: HS256
       SECURITY_JWT_HS256_SECRET: ${APP_JWT_SECRET}
       SECURITY_JWT_HS256_SECRET_FORMAT: raw
@@ -402,14 +404,14 @@ services:
 
       EUREKA_INSTANCE_HOSTNAME: classroom-service
       EUREKA_INSTANCE_NON_SECURE_PORT: 8083
-
+      
       EUREKA_CLIENT_ENABLED: "true"
       EUREKA_CLIENT_REGISTER_WITH_EUREKA: "true"
       EUREKA_CLIENT_FETCH_REGISTRY: "true"
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
 
-
+      EUREKA_INSTANCE_METADATA_MAP_GRPC_HOST: classroom-service
 
       SPRING_MVC_STATIC_PATH_PATTERN: /static/**
       SPRING_WEB_RESOURCES_STATIC_LOCATIONS: classpath:/static/
@@ -481,3 +483,4 @@ volumes:
   minio-data:
   caddy-data:
   caddy-config:
+

@@ -175,7 +175,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MESSAGING_KAFKA_ENABLED: "true"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      AUTHORIZATION_CLASSROOM_INTERNAL_API_KEY: change-me-dev-internal-api-key
+      CLASSROOM_INTERNAL_API_KEY: change-me-dev-internal-api-key
       CLASSROOM_AUTH_BASE_URL: http://gateway:8080
       SPRING_APPLICATION_NAME: material-service
       MINIO_PUBLIC_URL: http://localhost:9000 #Ensure presigned urls can be reached from outside the docker compose network
@@ -282,7 +282,25 @@ services:
     container_name: classroom-service
     ports:
       - "18083:8082"
+      - "19093:9093" # optional, useful if you want to test gRPC from the host
     environment:
+      # Eureka registration
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "true"
+      EUREKA_CLIENT_FETCH_REGISTRY: "true"
+      EUREKA_INSTANCE_HOSTNAME: classroom-service
+      EUREKA_INSTANCE_NONSECUREPORT: "8082"
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+
+
+      # gRPC listener + Eureka metadata
+      CLASSROOM_INTERNAL_API_KEY: change-me-dev-internal-api-key
+      CLASSROOM_GRPC_PORT: "9093"
+      EUREKA_INSTANCE_METADATA_MAP_GRPC_ENABLED: "true"
+      EUREKA_INSTANCE_METADATA_MAP_GRPC_HOST: classroom-service
+      EUREKA_INSTANCE_METADATA_MAP_GRPC_PORT: "9093"
+
+      # App config
       MESSAGING_KAFKA_ENABLED: "true"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -311,6 +329,7 @@ services:
         -Deureka.instance.nonSecurePort=8082
         -Deureka.instance.preferIpAddress=false
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+
     volumes:
       - otel-java-agent:/otel:ro
     depends_on:
