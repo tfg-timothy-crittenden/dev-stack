@@ -6,4 +6,16 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-          - "host.docker.internal:8084"
+          - "user-service:8082"
+
+  - job_name: "material-service"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - "material-service:8082"
+
+  - job_name: "classroom-service"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - "classroom-service:8082"

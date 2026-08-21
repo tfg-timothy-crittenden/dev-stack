@@ -2,25 +2,23 @@
   "apiVersion": "dashboard.grafana.app/v2",
   "kind": "Dashboard",
   "metadata": {
-    "name": "user-service-observability",
+    "name": "classroom-service-observability",
     "namespace": "default",
-    "uid": "62d243a8-f912-4df6-84c4-c4cf91f75f86",
-    "resourceVersion": "1787237016415996",
-    "generation": 4,
-    "creationTimestamp": "2026-08-18T12:08:08Z",
+    "uid": "245945a7-58e9-4438-864e-dbc48d561904",
+    "resourceVersion": "1787236926720003",
+    "generation": 1,
+    "creationTimestamp": "2026-08-20T12:02:42Z",
     "labels": {
-      "grafana.app/deprecatedInternalID": "15551770324992"
+      "grafana.app/deprecatedInternalID": "738956743581696"
     },
     "annotations": {
       "grafana.app/createdBy": "access-policy:service",
       "grafana.app/folder": "efvjvktw810cga",
       "grafana.app/managedBy": "classic-file-provisioning",
       "grafana.app/managerId": "TFG",
-      "grafana.app/sourceChecksum": "ea289ce1fdc1e8da510f5492aee8ec5a",
-      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/user-service.json",
-      "grafana.app/sourceTimestamp": "1787237012000",
-      "grafana.app/updatedBy": "access-policy:service",
-      "grafana.app/updatedTimestamp": "2026-08-20T14:43:36Z",
+      "grafana.app/sourceChecksum": "adf4b1bf4f1218b31b108d1a02bed183",
+      "grafana.app/sourcePath": "/var/lib/grafana/dashboards/classroom-service.json",
+      "grafana.app/sourceTimestamp": "1787236910000",
       "grafana.app/folderTitle": "TFG",
       "grafana.app/folderUrl": "/dashboards/f/efvjvktw810cga/tfg"
     }
@@ -60,7 +58,7 @@
             "group": "prometheus",
             "kind": "DataQuery",
             "spec": {
-              "expr": "rate(http_server_requests_seconds_count{job=\"user-service\"}[1m])",
+              "expr": "rate(http_server_requests_seconds_count{job=\"classroom-service\"}[1m])",
               "interval": "",
               "refId": "Anno"
             },
@@ -91,7 +89,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(rate(http_server_requests_seconds_count{job=\"user-service\"}[2m]))",
+                        "expr": "sum(rate(http_server_requests_seconds_count{job=\"classroom-service\"}[2m]))",
                         "legendFormat": "__auto",
                         "range": true
                       },
@@ -213,7 +211,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "histogram_quantile(\r\n  0.95,\r\n  sum by (le) (\r\n    rate(http_server_requests_seconds_bucket{job=\"user-service\"}[5m])\r\n  )\r\n)",
+                        "expr": "histogram_quantile(\r\n  0.95,\r\n  sum by (le) (\r\n    rate(http_server_requests_seconds_bucket{job=\"classroom-service\"}[5m])\r\n  )\r\n)",
                         "legendFormat": "__auto",
                         "range": true
                       },
@@ -333,7 +331,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(jvm_memory_used_bytes{job=\"user-service\", area=\"heap\"})",
+                        "expr": "sum(jvm_memory_used_bytes{job=\"classroom-service\", area=\"heap\"})",
                         "legendFormat": "__auto",
                         "range": true
                       },
@@ -454,7 +452,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum(\r\n  rate(\r\n    http_server_requests_seconds_count{\r\n      job=\"user-service\",\r\n      status=~\"5..\"\r\n    }[30s]\r\n  )\r\n) OR vector(0)",
+                        "expr": "sum(\r\n  rate(\r\n    http_server_requests_seconds_count{\r\n      job=\"classroom-service\",\r\n      status=~\"5..\"\r\n    }[30s]\r\n  )\r\n) OR vector(0)",
                         "legendFormat": "__auto",
                         "range": true
                       },
@@ -574,7 +572,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(\r\n  100 *\r\n  sum(\r\n    rate(\r\n      http_server_requests_seconds_count{\r\n        job=\"user-service\",\r\n        status=~\"5..\"\r\n      }[30s]\r\n    )\r\n  )\r\n  /\r\n  sum(\r\n    rate(\r\n      http_server_requests_seconds_count{\r\n        job=\"user-service\"\r\n      }[30s]\r\n    )\r\n  )\r\n) OR vector(0)",
+                        "expr": "(\r\n  100 *\r\n  sum(\r\n    rate(\r\n      http_server_requests_seconds_count{\r\n        job=\"classroom-service\",\r\n        status=~\"5..\"\r\n      }[30s]\r\n    )\r\n  )\r\n  /\r\n  sum(\r\n    rate(\r\n      http_server_requests_seconds_count{\r\n        job=\"classroom-service\"\r\n      }[30s]\r\n    )\r\n  )\r\n) OR vector(0)",
                         "legendFormat": "__auto",
                         "range": true
                       },
@@ -695,7 +693,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "hikaricp_connections_active{job=\"user-service\"}\r\nor on() vector(0)",
+                        "expr": "hikaricp_connections_active{job=\"classroom-service\"}\r\nor on() vector(0)",
                         "legendFormat": "__auto",
                         "range": true
                       },
@@ -779,7 +777,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "hikaricp_connections_pending{job=\"user-service\"}\r\nor on() vector(0)",
+                        "expr": "hikaricp_connections_pending{job=\"classroom-service\"}\r\nor on() vector(0)",
                         "legendFormat": "__auto",
                         "range": true
                       },
@@ -863,7 +861,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "histogram_quantile(\r\n  0.95,\r\n  sum by (le, uri, method) (\r\n    rate(\r\n      http_server_requests_seconds_bucket{\r\n        job=\"user-service\",\r\n        uri!~\"/actuator.*\"\r\n      }[5m]\r\n    )\r\n  )\r\n)",
+                        "expr": "histogram_quantile(\r\n  0.95,\r\n  sum by (le, uri, method) (\r\n    rate(\r\n      http_server_requests_seconds_bucket{\r\n        job=\"classroom-service\",\r\n        uri!~\"/actuator.*\"\r\n      }[5m]\r\n    )\r\n  )\r\n)",
                         "legendFormat": "{{method}} {{uri}}",
                         "range": true
                       },
@@ -1079,12 +1077,12 @@
         "1d"
       ],
       "fiscalYearStartMonth": 0,
-      "from": "now-5m",
+      "from": "now-30m",
       "hideTimepicker": false,
       "timezone": "browser",
       "to": "now"
     },
-    "title": "User Service Observability",
+    "title": "Classroom Service Observability",
     "variables": []
   }
 }
