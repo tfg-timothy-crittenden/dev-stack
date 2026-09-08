@@ -89,6 +89,14 @@ services:
       POSTGRES_PASSWORD: secret
     ports:
       - "5435:5432"
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_replication_slots=10"
     volumes:
       - classroom-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -459,6 +467,8 @@ services:
       kafka:
         condition: service_healthy
       material-db:
+        condition: service_healthy
+      classroom-db:
         condition: service_healthy
 
     ports:
