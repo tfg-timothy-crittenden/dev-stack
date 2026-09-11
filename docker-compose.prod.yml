@@ -302,7 +302,6 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MESSAGING_KAFKA_ENABLED: "true"
       MESSAGING_TOPICS_MATERIAL_DELETED: material.deleted.v1
-      MESSAGING_TOPICS_MATERIAL_TITLES_UPDATED: material.titles.updated.v1
 
       AUTHORIZATION_CLASSROOM_ENABLED: "true"
       AUTHORIZATION_CLASSROOM_FAIL_OPEN: "false"
@@ -397,8 +396,6 @@ services:
 
       CLASSROOM_KAFKA_MATERIAL_DELETED_TOPIC: material.deleted.v1
       CLASSROOM_KAFKA_MATERIAL_DELETED_GROUP_ID: classroom-service-material-deleted
-      CLASSROOM_KAFKA_MATERIAL_TITLES_UPDATED_TOPIC: material.titles.updated.v1
-      CLASSROOM_KAFKA_MATERIAL_TITLES_UPDATED_GROUP_ID: classroom-service-material-titles-updated
       CLASSROOM_KAFKA_USER_TEACHER_ROLE_REVOKED_TOPIC: user.teacher-role-revoked.v1
       CLASSROOM_KAFKA_USER_TEACHER_ROLE_REVOKED_GROUP_ID: classroom-service-user-teacher-role-revoked
 
