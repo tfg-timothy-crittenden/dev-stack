@@ -188,9 +188,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://material-db:5432/material_db?stringtype=unspecified #Needed to prevent JSON strings from being interpreted as VARCHAR
       SPRING_DATASOURCE_USERNAME: myuser
       SPRING_DATASOURCE_PASSWORD: secret
-      SPRING_SQL_INIT_MODE: always
       SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_HIBERNATE_DDL_AUTO: none
+      SPRING_SQL_INIT_MODE: never
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
       # Observability
       OTEL_SERVICE_NAME: material-service
@@ -315,12 +315,16 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SECURITY_INTERNAL_API_KEY: change-me-dev-internal-api-key
       SPRING_APPLICATION_NAME: classroom-service
+
       SPRING_DATASOURCE_URL: jdbc:postgresql://classroom-db:5432/classroom_db
       SPRING_DATASOURCE_USERNAME: myuser
       SPRING_DATASOURCE_PASSWORD: secret
-      SPRING_SQL_INIT_MODE: always
-      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+
+      SPRING_JPA_HIBERNATE_DDL_AUTO: none
+      SPRING_SQL_INIT_MODE: never
+
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "false"
+
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
       # Observability
       OTEL_SERVICE_NAME: classroom-service
@@ -379,7 +383,7 @@ services:
     restart: "no"
 
   minio:
-    image: minio/minio:RELEASE.2025-02-28T09-55-16Z
+    image: quay.io/minio/minio:RELEASE.2025-02-28T09-55-16Z
     container_name: minio
     command: server /data --console-address ":9001"
     environment:
